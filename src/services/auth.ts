@@ -1,5 +1,6 @@
 import type { GoogleUser, TokenResponse } from '../types/auth';
 import { getSetting } from './db';
+import { syncTokenToServiceWorker } from './swBridge';
 
 // OAuth Scopes
 export const SCOPE_DRIVE_FILE = 'https://www.googleapis.com/auth/drive.file';
@@ -103,6 +104,7 @@ export async function requestToken(
       inMemoryAccessToken = resp.access_token;
       tokenExpiresAt = Date.now() + (resp.expires_in || 3600) * 1000;
       activeScope = scope;
+      syncTokenToServiceWorker();
       resolve(resp.access_token);
     };
 
@@ -149,6 +151,7 @@ export async function signOut(userEmail?: string): Promise<void> {
   const token = inMemoryAccessToken;
   inMemoryAccessToken = null;
   tokenExpiresAt = 0;
+  syncTokenToServiceWorker();
 
   if (token && window.google?.accounts?.oauth2) {
     try {

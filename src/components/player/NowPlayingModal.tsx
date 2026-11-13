@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import type { Track } from '../../types/music';
 import {
   ChevronDown,
   Play,
@@ -14,12 +15,17 @@ import {
   ListMusic,
   Disc3,
   X,
+  ListPlus,
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { formatDuration } from '../../utils/format';
 import { getFavorites, toggleFavorite } from '../../services/db';
 
-export const NowPlayingModal: React.FC = () => {
+interface NowPlayingModalProps {
+  onAddToPlaylist?: (track: Track) => void;
+}
+
+export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ onAddToPlaylist }) => {
   const {
     currentTrack,
     isPlaying,
@@ -184,17 +190,29 @@ export const NowPlayingModal: React.FC = () => {
             <h2 className="text-xl font-bold text-white truncate">{currentTrack.title}</h2>
             <p className="text-sm text-neutral-400 truncate">{currentTrack.artist}</p>
           </div>
-          <button
-            onClick={handleToggleFavorite}
-            className="p-2 rounded-full hover:bg-neutral-800 transition"
-            aria-label="Favorite"
-          >
-            <Heart
-              className={`w-6 h-6 transition ${
-                isFav ? 'fill-emerald-500 text-emerald-500' : 'text-neutral-400 hover:text-white'
-              }`}
-            />
-          </button>
+          <div className="flex items-center space-x-1">
+            {onAddToPlaylist && (
+              <button
+                onClick={() => onAddToPlaylist(currentTrack)}
+                className="p-2 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition"
+                title="Add to playlist"
+                aria-label="Add to playlist"
+              >
+                <ListPlus className="w-6 h-6" />
+              </button>
+            )}
+            <button
+              onClick={handleToggleFavorite}
+              className="p-2 rounded-full hover:bg-neutral-800 transition"
+              aria-label="Favorite"
+            >
+              <Heart
+                className={`w-6 h-6 transition ${
+                  isFav ? 'fill-emerald-500 text-emerald-500' : 'text-neutral-400 hover:text-white'
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Scrubber / Slider */}

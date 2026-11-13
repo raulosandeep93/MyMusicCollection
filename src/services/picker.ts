@@ -96,3 +96,4 @@ export async function openFolderPicker(): Promise<PickedFolder | null> {
     }
   });
 }
+

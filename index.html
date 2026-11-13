@@ -11,6 +11,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Cloud Music Player</title>
 
+    <!-- Strict Content Security Policy (CSP) for Google Drive PWA -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com https://drive-thirdparty.googleusercontent.com; media-src 'self' blob: https://*.googleapis.com; connect-src 'self' https://accounts.google.com https://apis.google.com https://*.googleapis.com; frame-src https://accounts.google.com https://docs.google.com; worker-src 'self' blob:;"
+    />
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
     <!-- Google Identity Services (GIS) Web SDK -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Google API Client Library (Required for Google Picker) -->

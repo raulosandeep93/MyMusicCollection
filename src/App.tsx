@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { PlayerProvider } from './context/PlayerContext';
+import { PlayerProvider, usePlayer } from './context/PlayerContext';
 import { Header } from './components/common/Header';
 import { BottomNav, type NavTab } from './components/common/BottomNav';
 import { Sidebar } from './components/common/Sidebar';
@@ -13,8 +13,10 @@ import { SettingsScreen } from './components/screens/SettingsScreen';
 import { AuthModal } from './components/screens/AuthModal';
 import { AlbumDetailModal } from './components/screens/AlbumDetailModal';
 import { ArtistDetailModal } from './components/screens/ArtistDetailModal';
+import { PlaylistDetailModal } from './components/screens/PlaylistDetailModal';
+import { AddToPlaylistModal } from './components/common/AddToPlaylistModal';
 import { ScanProgressModal } from './components/screens/ScanProgressModal';
-import type { Album, Artist } from './types/music';
+import type { Album, Artist, Playlist, Track } from './types/music';
 import { getAllTracks, getSetting } from './services/db';
 import { openFolderPicker } from './services/picker';
 import {
@@ -26,16 +28,20 @@ import {
 
 const MainApp: React.FC = () => {
   const { isAuthenticated, switchScope } = useAuth();
+  const { restoreTrack } = usePlayer();
 
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [selectedArtist, setSelectedArtist] = useState<Artist | null>(null);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const [trackForAddToPlaylist, setTrackForAddToPlaylist] = useState<Track | null>(null);
 
   const [folderName, setFolderName] = useState<string | null>(null);
   const [folderId, setFolderId] = useState<string | null>(null);
   const [trackCount, setTrackCount] = useState<number>(0);
+  const [allTracks, setAllTracks] = useState<Track[]>([]);
 
   // Scan progress state
   const [isScanModalOpen, setIsScanModalOpen] = useState<boolean>(false);
@@ -46,12 +52,23 @@ const MainApp: React.FC = () => {
 
   const refreshLibraryStats = useCallback(async () => {
     const tracks = await getAllTracks();
+    setAllTracks(tracks);
     setTrackCount(tracks.length);
     const savedFolderName = await getSetting<string | null>('selected_folder_name', null);
     const savedFolderId = await getSetting<string | null>('selected_folder_id', null);
     setFolderName(savedFolderName);
     setFolderId(savedFolderId);
-  }, []);
+
+    // Restore last played track and position if available
+    const lastTrackId = await getSetting<string | null>('last_played_track_id', null);
+    const lastPos = await getSetting<number>('last_played_position', 0);
+    if (lastTrackId) {
+      const found = tracks.find((t) => t.id === lastTrackId);
+      if (found) {
+        restoreTrack(found, lastPos);
+      }
+    }
+  }, [restoreTrack]);
 
   useEffect(() => {
     refreshLibraryStats();
@@ -167,6 +184,8 @@ const MainApp: React.FC = () => {
             <LibraryScreen
               onSelectAlbum={setSelectedAlbum}
               onSelectArtist={setSelectedArtist}
+              onSelectPlaylist={setSelectedPlaylist}
+              onAddToPlaylist={setTrackForAddToPlaylist}
             />
           )}
         </main>
@@ -179,7 +198,7 @@ const MainApp: React.FC = () => {
       </div>
 
       {/* Modals & Overlays */}
-      <NowPlayingModal />
+      <NowPlayingModal onAddToPlaylist={setTrackForAddToPlaylist} />
 
       {isSettingsOpen && (
         <SettingsScreen
@@ -211,6 +230,18 @@ const MainApp: React.FC = () => {
 
       <AlbumDetailModal album={selectedAlbum} onClose={() => setSelectedAlbum(null)} />
       <ArtistDetailModal artist={selectedArtist} onClose={() => setSelectedArtist(null)} />
+
+      <PlaylistDetailModal
+        playlist={selectedPlaylist}
+        tracks={allTracks}
+        onClose={() => setSelectedPlaylist(null)}
+        onPlaylistUpdated={refreshLibraryStats}
+      />
+
+      <AddToPlaylistModal
+        track={trackForAddToPlaylist}
+        onClose={() => setTrackForAddToPlaylist(null)}
+      />
     </div>
   );
 };

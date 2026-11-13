@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import type { Track, RepeatMode } from '../types/music';
 import { addPlayHistory, getSetting, setSetting } from '../services/db';
+import {
+  updateMediaSessionMetadata,
+  setMediaSessionPlaybackState,
+  updateMediaSessionPositionState,
+  setupMediaSessionHandlers,
+} from '../services/mediaSession';
 
 interface PlayerContextType {
   currentTrack: Track | null;
@@ -26,6 +32,7 @@ interface PlayerContextType {
   toggleRepeat: () => void;
   addToQueue: (track: Track) => void;
   removeFromQueue: (index: number) => void;
+  restoreTrack: (track: Track, position?: number) => void;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
@@ -45,11 +52,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Hidden audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastSavedPositionRef = useRef<number>(0);
 
   // Initialize audio element
   useEffect(() => {
     const audio = new Audio();
     audio.preload = 'metadata';
+    // Essential for mobile background audio & cross-origin stream range requests
+    audio.crossOrigin = 'anonymous';
     audioRef.current = audio;
 
     // Load initial settings
@@ -59,7 +69,24 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      const cur = audio.currentTime;
+      setCurrentTime(cur);
+      const dur = audio.duration || 0;
+
+      // Update Media Session position state
+      if (dur > 0) {
+        updateMediaSessionPositionState({
+          duration: dur,
+          playbackRate: audio.playbackRate,
+          position: cur,
+        });
+      }
+
+      // Throttled persistence of position to IndexedDB (every 5 seconds)
+      if (Math.abs(cur - lastSavedPositionRef.current) > 5) {
+        lastSavedPositionRef.current = cur;
+        setSetting('last_played_position', cur).catch(console.error);
+      }
     };
 
     const onDurationChange = () => {
@@ -68,11 +95,17 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
 
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
+    const onPlay = () => {
+      setIsPlaying(true);
+      setMediaSessionPlaybackState('playing');
+    };
+
+    const onPause = () => {
+      setIsPlaying(false);
+      setMediaSessionPlaybackState('paused');
+    };
 
     const onEnded = () => {
-      // Audio track ended naturally
       handleTrackEnded();
     };
 
@@ -101,6 +134,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (queue.length === 0) {
       setIsPlaying(false);
+      setMediaSessionPlaybackState('paused');
       return;
     }
 
@@ -111,6 +145,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       playTrackAt(0);
     } else {
       setIsPlaying(false);
+      setMediaSessionPlaybackState('none');
     }
   }, [queue, queueIndex, repeatMode]);
 
@@ -123,18 +158,23 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setCurrentTime(0);
         setDuration(track.duration || 0);
 
-        // Record history
-        addPlayHistory(track.id).catch(console.error);
+        // Update Media Session Lock Screen Metadata immediately
+        updateMediaSessionMetadata(track);
+        setMediaSessionPlaybackState('playing');
 
-        // Connect audio source (routed to Service Worker proxy in Phase 3)
+        // Record history and settings
+        addPlayHistory(track.id).catch(console.error);
+        setSetting('last_played_track_id', track.id).catch(console.error);
+
+        // Assign stream URL and start playback
         if (audioRef.current) {
           audioRef.current.src = `/api/stream/${track.id}`;
+          audioRef.current.load();
           audioRef.current
             .play()
             .then(() => setIsPlaying(true))
             .catch((err) => {
-              console.warn('Playback deferred or stream proxy pending:', err);
-              // Set simulated playing state for UI until streaming proxy responds
+              console.warn('Playback error or background restriction:', err);
             });
         }
       }
@@ -159,10 +199,15 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setCurrentTime(0);
       setDuration(track.duration || 0);
 
+      updateMediaSessionMetadata(track);
+      setMediaSessionPlaybackState('playing');
+
       addPlayHistory(track.id).catch(console.error);
+      setSetting('last_played_track_id', track.id).catch(console.error);
 
       if (audioRef.current) {
         audioRef.current.src = `/api/stream/${track.id}`;
+        audioRef.current.load();
         audioRef.current
           .play()
           .then(() => setIsPlaying(true))
@@ -179,10 +224,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
+      setMediaSessionPlaybackState('paused');
     } else {
       audioRef.current
         .play()
-        .then(() => setIsPlaying(true))
+        .then(() => {
+          setIsPlaying(true);
+          setMediaSessionPlaybackState('playing');
+        })
         .catch(console.error);
     }
   }, [isPlaying, currentTrack]);
@@ -202,7 +251,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const previousTrack = useCallback(() => {
     if (!audioRef.current || queue.length === 0) return;
-    // If played more than 3 seconds, restart the song
     if (currentTime > 3) {
       audioRef.current.currentTime = 0;
       setCurrentTime(0);
@@ -286,6 +334,56 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [queueIndex]
   );
 
+  // Wire up Media Session API action handlers (Lock screen, notifications, bluetooth headsets)
+  useEffect(() => {
+    setupMediaSessionHandlers({
+      onPlay: () => {
+        if (audioRef.current) {
+          audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
+        }
+      },
+      onPause: () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
+      },
+      onNext: () => nextTrack(),
+      onPrevious: () => previousTrack(),
+      onSeekTo: (details) => {
+        if (details.seekTime !== undefined && details.seekTime !== null) {
+          seek(details.seekTime);
+        }
+      },
+      onSeekForward: (details) => {
+        const offset = details.seekOffset || 10;
+        if (audioRef.current) {
+          seek(Math.min(audioRef.current.currentTime + offset, audioRef.current.duration || 0));
+        }
+      },
+      onSeekBackward: (details) => {
+        const offset = details.seekOffset || 10;
+        if (audioRef.current) {
+          seek(Math.max(0, audioRef.current.currentTime - offset));
+        }
+      },
+    });
+  }, [nextTrack, previousTrack, seek]);
+
+  const restoreTrack = useCallback((track: Track, position = 0) => {
+    setCurrentTrack(track);
+    setCurrentTime(position);
+    setDuration(track.duration || 0);
+    setQueue([track]);
+    setQueueIndex(0);
+    updateMediaSessionMetadata(track);
+    setMediaSessionPlaybackState('paused');
+    if (audioRef.current) {
+      audioRef.current.src = `/api/stream/${track.id}`;
+      audioRef.current.currentTime = position;
+    }
+  }, []);
+
   return (
     <PlayerContext.Provider
       value={{
@@ -312,6 +410,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleRepeat,
         addToQueue,
         removeFromQueue,
+        restoreTrack,
       }}
     >
       {children}
@@ -335,4 +434,3 @@ function shuffleArray<T>(array: T[]): T[] {
   }
   return copy;
 }
-

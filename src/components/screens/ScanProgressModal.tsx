@@ -134,3 +134,4 @@ export const ScanProgressModal: React.FC<ScanProgressModalProps> = ({
     </div>
   );
 };
+

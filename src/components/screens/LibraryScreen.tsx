@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Music2, Disc3, User, Heart, ListMusic, Plus, Trash2 } from 'lucide-react';
+import { Music2, Disc3, User, Heart, ListMusic, Plus, Trash2, ListPlus } from 'lucide-react';
 import type { Track, Album, Artist, Playlist } from '../../types/music';
 import {
   getAllTracks,
@@ -17,9 +17,16 @@ type LibraryTab = 'songs' | 'albums' | 'artists' | 'playlists' | 'favourites';
 interface LibraryScreenProps {
   onSelectAlbum?: (album: Album) => void;
   onSelectArtist?: (artist: Artist) => void;
+  onSelectPlaylist?: (playlist: Playlist) => void;
+  onAddToPlaylist?: (track: Track) => void;
 }
 
-export const LibraryScreen: React.FC<LibraryScreenProps> = ({ onSelectAlbum, onSelectArtist }) => {
+export const LibraryScreen: React.FC<LibraryScreenProps> = ({
+  onSelectAlbum,
+  onSelectArtist,
+  onSelectPlaylist,
+  onAddToPlaylist,
+}) => {
   const { playTrack } = usePlayer();
   const [tab, setTab] = useState<LibraryTab>('songs');
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -205,7 +212,19 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ onSelectAlbum, onS
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3 shrink-0 pl-2">
+                  <div className="flex items-center space-x-2 shrink-0 pl-2">
+                    {onAddToPlaylist && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddToPlaylist(track);
+                        }}
+                        className="p-1 text-neutral-400 hover:text-white transition"
+                        title="Add to playlist"
+                      >
+                        <ListPlus className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={(e) => handleToggleFav(e, track.id)}
                       className="p-1 text-neutral-400 hover:text-white transition"
@@ -336,7 +355,8 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({ onSelectAlbum, onS
           {playlists.map((pl) => (
             <div
               key={pl.id}
-              className="bg-neutral-900/60 p-4 rounded-xl border border-neutral-800/60 relative group"
+              onClick={() => onSelectPlaylist?.(pl)}
+              className="bg-neutral-900/60 hover:bg-neutral-850 p-4 rounded-xl border border-neutral-800/60 relative group cursor-pointer transition"
             >
               <div className="w-12 h-12 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-400 mb-3">
                 <ListMusic className="w-6 h-6" />
