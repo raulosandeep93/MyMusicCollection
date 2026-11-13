@@ -55,3 +55,4 @@ export interface PlayerState {
   queueIndex: number;
   playbackHistory: string[]; // Track IDs
 }
+

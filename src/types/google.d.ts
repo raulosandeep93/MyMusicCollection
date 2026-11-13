@@ -21,7 +21,7 @@ declare namespace google.accounts.id {
 }
 
 declare namespace gapi {
-  function load(apiOrApis: string, callback: () => void): void;
+  function load(apiOrApis: string, callbackOrConfig: any): void;
   namespace client {
     function init(args: any): Promise<any>;
     function request(args: any): Promise<any>;
@@ -67,3 +67,4 @@ interface Window {
   };
   gapi?: typeof gapi;
 }
+

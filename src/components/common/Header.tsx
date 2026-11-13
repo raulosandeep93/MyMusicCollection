@@ -1,14 +1,22 @@
 import React from 'react';
-import { Settings, Folder, UserCircle, LogIn, Disc3 } from 'lucide-react';
+import { Settings, Folder, UserCircle, LogIn, Disc3, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 interface HeaderProps {
   onOpenSettings: () => void;
   onOpenAuth: () => void;
+  onRefreshLibrary?: () => void;
   folderName?: string | null;
+  isScanning?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenAuth, folderName }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onOpenSettings,
+  onOpenAuth,
+  onRefreshLibrary,
+  folderName,
+  isScanning,
+}) => {
   const { isAuthenticated, user } = useAuth();
 
   return (
@@ -31,6 +39,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenAuth, fold
       </div>
 
       <div className="flex items-center space-x-2">
+        {folderName && onRefreshLibrary && (
+          <button
+            onClick={onRefreshLibrary}
+            disabled={isScanning}
+            className="p-2 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition disabled:opacity-50"
+            title="Refresh Library"
+            aria-label="Refresh Library"
+          >
+            <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin text-emerald-400' : ''}`} />
+          </button>
+        )}
+
         {isAuthenticated && user ? (
           <div className="flex items-center space-x-2">
             {user.picture ? (
@@ -68,3 +88,4 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenAuth, fold
     </header>
   );
 };
+

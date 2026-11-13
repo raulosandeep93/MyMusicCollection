@@ -7,6 +7,7 @@ import {
   LogOut,
   CheckCircle2,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { SCOPE_DRIVE_FILE, SCOPE_DRIVE_READONLY } from '../../services/auth';
@@ -16,6 +17,8 @@ interface SettingsScreenProps {
   onClose: () => void;
   folderName?: string | null;
   onSelectFolderClick: () => void;
+  onRefreshLibrary: () => void;
+  isScanning: boolean;
   trackCount: number;
   onLibraryCleared: () => void;
 }
@@ -24,6 +27,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onClose,
   folderName,
   onSelectFolderClick,
+  onRefreshLibrary,
+  isScanning,
   trackCount,
   onLibraryCleared,
 }) => {
@@ -249,7 +254,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </form>
 
           {/* Library Cache & Maintenance */}
-          <div className="bg-neutral-950/70 border border-neutral-850 rounded-2xl p-5 space-y-3">
+          <div className="bg-neutral-950/70 border border-neutral-855 rounded-2xl p-5 space-y-3">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">
               Library Storage & Cache
             </h3>
@@ -257,7 +262,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <span className="text-neutral-300">Cached Audio Tracks:</span>
               <span className="font-bold text-white font-mono">{trackCount} tracks</span>
             </div>
-            <div className="pt-2">
+            <div className="pt-2 flex flex-wrap gap-2">
+              {folderName && (
+                <button
+                  onClick={onRefreshLibrary}
+                  disabled={isScanning}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold transition disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+                  <span>{isScanning ? 'Scanning...' : 'Refresh Library Now'}</span>
+                </button>
+              )}
               <button
                 onClick={handleClearCache}
                 disabled={isClearing}

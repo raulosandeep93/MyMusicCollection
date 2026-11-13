@@ -70,3 +70,4 @@ export const ArtistDetailModal: React.FC<ArtistDetailModalProps> = ({ artist, on
     </div>
   );
 };
+

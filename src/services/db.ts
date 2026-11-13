@@ -166,3 +166,4 @@ export async function setSetting<T>(key: string, value: T): Promise<void> {
   const db = await getDB();
   await db.put('settings', { key, value });
 }
+
