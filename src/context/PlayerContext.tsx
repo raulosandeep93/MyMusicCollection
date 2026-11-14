@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import type { Track, RepeatMode } from '../types/music';
 import { addPlayHistory, getSetting, setSetting } from '../services/db';
+import { getAudioStreamUrl } from '../services/streaming';
 import {
   updateMediaSessionMetadata,
   setMediaSessionPlaybackState,
@@ -11,6 +12,8 @@ import {
 interface PlayerContextType {
   currentTrack: Track | null;
   isPlaying: boolean;
+  isBuffering: boolean;
+  bufferProgress: number;
   currentTime: number;
   duration: number;
   volume: number;
@@ -40,6 +43,8 @@ const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isBuffering, setIsBuffering] = useState<boolean>(false);
+  const [bufferProgress, setBufferProgress] = useState<number>(0);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [volume, setVolumeState] = useState<number>(0.8);
@@ -53,6 +58,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Hidden audio element reference
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastSavedPositionRef = useRef<number>(0);
+  const activeLoadingTrackId = useRef<string | null>(null);
 
   // Initialize audio element
   useEffect(() => {
@@ -150,7 +156,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [queue, queueIndex, repeatMode]);
 
   const playTrackAt = useCallback(
-    (index: number) => {
+    async (index: number) => {
       if (index >= 0 && index < queue.length) {
         const track = queue[index];
         setQueueIndex(index);
@@ -166,16 +172,31 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addPlayHistory(track.id).catch(console.error);
         setSetting('last_played_track_id', track.id).catch(console.error);
 
-        // Assign stream URL and start playback
-        if (audioRef.current) {
-          audioRef.current.src = `/api/stream/${track.id}`;
-          audioRef.current.load();
-          audioRef.current
-            .play()
-            .then(() => setIsPlaying(true))
-            .catch((err) => {
-              console.warn('Playback error or background restriction:', err);
-            });
+        activeLoadingTrackId.current = track.id;
+        setIsBuffering(true);
+        setBufferProgress(0);
+
+        try {
+          const streamUrl = await getAudioStreamUrl(track.id, (received, total) => {
+            if (activeLoadingTrackId.current === track.id && total > 0) {
+              setBufferProgress(Math.round((received / total) * 100));
+            }
+          });
+
+          // Check if user changed track while downloading
+          if (activeLoadingTrackId.current === track.id && audioRef.current) {
+            audioRef.current.src = streamUrl;
+            audioRef.current.currentTime = 0;
+            await audioRef.current.play();
+            setIsPlaying(true);
+          }
+        } catch (err) {
+          console.error('Audio playback error:', err);
+          setIsPlaying(false);
+        } finally {
+          if (activeLoadingTrackId.current === track.id) {
+            setIsBuffering(false);
+          }
         }
       }
     },
@@ -183,7 +204,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 
   const playTrack = useCallback(
-    (track: Track, newQueue?: Track[]) => {
+    async (track: Track, newQueue?: Track[]) => {
       let q = queue;
       if (newQueue && newQueue.length > 0) {
         q = isShuffle ? shuffleArray([...newQueue]) : newQueue;
@@ -205,15 +226,30 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       addPlayHistory(track.id).catch(console.error);
       setSetting('last_played_track_id', track.id).catch(console.error);
 
-      if (audioRef.current) {
-        audioRef.current.src = `/api/stream/${track.id}`;
-        audioRef.current.load();
-        audioRef.current
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch((err) => {
-            console.warn('Playback play request:', err);
-          });
+      activeLoadingTrackId.current = track.id;
+      setIsBuffering(true);
+      setBufferProgress(0);
+
+      try {
+        const streamUrl = await getAudioStreamUrl(track.id, (received, total) => {
+          if (activeLoadingTrackId.current === track.id && total > 0) {
+            setBufferProgress(Math.round((received / total) * 100));
+          }
+        });
+
+        if (activeLoadingTrackId.current === track.id && audioRef.current) {
+          audioRef.current.src = streamUrl;
+          audioRef.current.currentTime = 0;
+          await audioRef.current.play();
+          setIsPlaying(true);
+        }
+      } catch (err) {
+        console.error('Audio playback error:', err);
+        setIsPlaying(false);
+      } finally {
+        if (activeLoadingTrackId.current === track.id) {
+          setIsBuffering(false);
+        }
       }
     },
     [queue, isShuffle]
@@ -389,6 +425,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       value={{
         currentTrack,
         isPlaying,
+        isBuffering,
+        bufferProgress,
         currentTime,
         duration,
         volume,

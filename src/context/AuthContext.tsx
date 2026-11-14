@@ -9,7 +9,7 @@ import {
   getGoogleConfig,
   SCOPE_DRIVE_FILE,
 } from '../services/auth';
-import { setSetting } from '../services/db';
+import { setSetting, getSetting } from '../services/db';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -38,19 +38,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     appId: '',
   });
 
-  // Load configuration on mount
+  // Load configuration and restore session on mount
   useEffect(() => {
-    async function loadConfig() {
+    async function loadConfigAndSession() {
       try {
         const conf = await getGoogleConfig();
         setConfig(conf);
+
+        // Check if user was previously signed in
+        const wasLoggedIn = await getSetting<boolean>('auth_logged_in', false);
+        const savedUser = await getSetting<GoogleUser | null>('auth_user', null);
+        const savedScope = await getSetting<string>('auth_scope', SCOPE_DRIVE_FILE);
+
+        if (wasLoggedIn && savedUser) {
+          setUser(savedUser);
+          setIsAuthenticated(true);
+          setActiveScopeState(savedScope);
+
+          // Attempt silent background token refresh without user prompt
+          if (conf.clientId) {
+            try {
+              await requestToken('', savedScope);
+            } catch {
+              // Silent renewal may fail if 3rd party cookies are restricted;
+              // User remains shown as connected until an API call requires re-consent
+            }
+          }
+        }
       } catch (err: any) {
-        console.error('Failed to load Google configuration:', err);
+        console.error('Failed to load Google configuration or session:', err);
       } finally {
         setIsLoading(false);
       }
     }
-    loadConfig();
+    loadConfigAndSession();
   }, []);
 
   const updateConfig = useCallback(async (clientId: string, apiKey: string, appId?: string) => {
@@ -73,6 +94,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(profile);
         setIsAuthenticated(true);
         setActiveScopeState(getActiveScope());
+
+        // Remember non-sensitive session state
+        await setSetting('auth_logged_in', true);
+        await setSetting('auth_user', profile);
+        await setSetting('auth_scope', targetScope);
+
         return true;
       } catch (err: any) {
         // If silent request failed and forceConsent wasn't already set, retry with user consent
@@ -83,6 +110,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(profile);
             setIsAuthenticated(true);
             setActiveScopeState(getActiveScope());
+
+            await setSetting('auth_logged_in', true);
+            await setSetting('auth_user', profile);
+            await setSetting('auth_scope', targetScope);
+
             return true;
           } catch (retryErr: any) {
             setError(retryErr.message || 'Authentication failed');
@@ -109,6 +141,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       await signOut(user?.email);
+      await setSetting('auth_logged_in', false);
+      await setSetting('auth_user', null);
       setUser(null);
       setIsAuthenticated(false);
     } finally {

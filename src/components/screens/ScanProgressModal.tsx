@@ -9,6 +9,7 @@ interface ScanProgressModalProps {
   progress: ScanProgress | null;
   error: string | null;
   isScopeError: boolean;
+  activeScope?: string;
   onClose: () => void;
   onUpgradeScope: (scope: string) => void;
 }
@@ -19,10 +20,13 @@ export const ScanProgressModal: React.FC<ScanProgressModalProps> = ({
   progress,
   error,
   isScopeError,
+  activeScope,
   onClose,
   onUpgradeScope,
 }) => {
   if (!isOpen) return null;
+
+  const showZeroSongsWarning = !isScanning && !error && progress?.foundSongs === 0 && activeScope !== SCOPE_DRIVE_READONLY;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -85,6 +89,31 @@ export const ScanProgressModal: React.FC<ScanProgressModalProps> = ({
           <div className="text-xs text-neutral-400 truncate bg-neutral-950/60 p-2.5 rounded-lg border border-neutral-850">
             <span className="text-neutral-400">Current: </span>
             <span className="text-neutral-200 font-mono">{progress.currentFolder}</span>
+          </div>
+        )}
+
+        {/* 0 Songs Found due to drive.file Limitation */}
+        {showZeroSongsWarning && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs space-y-2.5">
+            <div className="flex items-center space-x-2 font-bold text-amber-300">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>Why were 0 songs found?</span>
+            </div>
+            <p className="leading-relaxed text-neutral-300">
+              You are currently using Google's narrowest scope (<code className="text-amber-300 font-mono">drive.file</code>).
+              Google Drive deliberately hides pre-existing files inside a folder from <code className="text-amber-300 font-mono">drive.file</code> unless each file was created by this app.
+            </p>
+            <p className="leading-relaxed text-neutral-300">
+              To read and stream all songs in your folder, authorize the least-privileged alternative: <strong className="text-white">drive.readonly</strong> (strictly read-only; no permission to modify, upload, or delete files).
+            </p>
+            <div className="pt-1.5">
+              <button
+                onClick={() => onUpgradeScope(SCOPE_DRIVE_READONLY)}
+                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs transition shadow-lg shadow-amber-500/20 active:scale-98"
+              >
+                Authorize drive.readonly & Re-scan Folder
+              </button>
+            </div>
           </div>
         )}
 

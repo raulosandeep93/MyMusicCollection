@@ -27,7 +27,7 @@ import {
 } from './services/drive';
 
 const MainApp: React.FC = () => {
-  const { isAuthenticated, switchScope } = useAuth();
+  const { isAuthenticated, switchScope, activeScope } = useAuth();
   const { restoreTrack } = usePlayer();
 
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
@@ -224,6 +224,7 @@ const MainApp: React.FC = () => {
         progress={scanProgress}
         error={scanError}
         isScopeError={isScopeError}
+        activeScope={activeScope}
         onClose={() => setIsScanModalOpen(false)}
         onUpgradeScope={handleUpgradeScopeAndRescan}
       />

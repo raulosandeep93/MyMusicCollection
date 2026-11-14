@@ -110,3 +110,4 @@ export function setupMediaSessionHandlers(callbacks: MediaSessionCallbacks): voi
     }
   }
 }
+

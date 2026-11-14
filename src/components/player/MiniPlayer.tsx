@@ -1,11 +1,12 @@
 import React from 'react';
-import { Play, Pause, SkipForward, SkipBack, Music2 } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Music2, Loader2 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 
 export const MiniPlayer: React.FC = () => {
   const {
     currentTrack,
     isPlaying,
+    isBuffering,
     currentTime,
     duration,
     togglePlay,
@@ -51,7 +52,13 @@ export const MiniPlayer: React.FC = () => {
             <p className="text-sm font-semibold text-neutral-100 truncate hover:underline">
               {currentTrack.title}
             </p>
-            <p className="text-xs text-neutral-400 truncate">{currentTrack.artist}</p>
+            <p className="text-xs text-neutral-400 truncate">
+              {isBuffering ? (
+                <span className="text-emerald-400">Loading audio...</span>
+              ) : (
+                currentTrack.artist
+              )}
+            </p>
           </div>
         </div>
 
@@ -74,11 +81,14 @@ export const MiniPlayer: React.FC = () => {
               e.stopPropagation();
               togglePlay();
             }}
-            className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 flex items-center justify-center transition shadow-lg shadow-emerald-500/20 active:scale-95"
-            title={isPlaying ? 'Pause' : 'Play'}
-            aria-label={isPlaying ? 'Pause' : 'Play'}
+            disabled={isBuffering}
+            className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 flex items-center justify-center transition shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-90"
+            title={isBuffering ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
+            aria-label={isBuffering ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? (
+            {isBuffering ? (
+              <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+            ) : isPlaying ? (
               <Pause className="w-5 h-5 fill-current" />
             ) : (
               <Play className="w-5 h-5 fill-current ml-0.5" />

@@ -51,31 +51,33 @@ export async function openFolderPicker(): Promise<PickedFolder | null> {
     token = await requestToken('');
   }
 
-  const { apiKey, appId } = await getGoogleConfig();
+  const { apiKey } = await getGoogleConfig();
   if (!apiKey) {
     throw new Error('Google Picker API Key is missing. Please enter it in Settings.');
   }
 
+  const cleanApiKey = apiKey.trim();
+  const origin = window.location.origin || `${window.location.protocol}//${window.location.host}`;
+
   return new Promise((resolve, reject) => {
     try {
-      const docsView = new window.google!.picker.DocsView(window.google!.picker.ViewId.FOLDERS)
+      // Allow viewing folders and audio files with folder selection enabled
+      const docsView = new window.google!.picker.DocsView()
         .setIncludeFolders(true)
-        .setSelectFolderEnabled(true)
-        .setMimeTypes('application/vnd.google-apps.folder');
+        .setSelectFolderEnabled(true);
 
       const builder = new window.google!.picker.PickerBuilder()
         .addView(docsView)
         .setOAuthToken(token!)
-        .setDeveloperKey(apiKey)
+        .setDeveloperKey(cleanApiKey)
+        .setOrigin(origin)
         .setTitle('Select Music Folder in Google Drive')
-        .setCallback((data: any) => {
+        .setCallback(async (data: any) => {
           if (data.action === window.google!.picker.Action.PICKED) {
             const doc = data.docs?.[0];
             if (doc) {
-              resolve({
-                id: doc.id,
-                name: doc.name,
-              });
+              const folder = await resolvePickedFolder(doc, token!);
+              resolve(folder);
             } else {
               resolve(null);
             }
@@ -84,16 +86,62 @@ export async function openFolderPicker(): Promise<PickedFolder | null> {
           }
         });
 
-      if (appId) {
-        // Optional App ID / Project number
-        (builder as any).setAppId(appId);
-      }
-
       const picker = builder.build();
       picker.setVisible(true);
     } catch (err: any) {
       reject(new Error(`Failed to open Google Picker: ${err.message}`));
     }
   });
+}
+
+/**
+ * Resolves the folder whether the user selected a folder directly or an audio file inside it.
+ */
+async function resolvePickedFolder(doc: any, token: string): Promise<PickedFolder> {
+  if (doc.mimeType === 'application/vnd.google-apps.folder' || doc.type === 'folder') {
+    return { id: doc.id, name: doc.name };
+  }
+
+  // If user selected an audio file inside the music folder, resolve its parent folder
+  const parentId = doc.parentId || doc.parents?.[0];
+  if (parentId) {
+    try {
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${parentId}?fields=id,name`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const parentData = await res.json();
+        return { id: parentData.id, name: parentData.name };
+      }
+    } catch {
+      // Fallback below
+    }
+    return { id: parentId, name: 'Music Folder' };
+  }
+
+  try {
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${doc.id}?fields=parents`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const fileData = await res.json();
+      const resolvedParentId = fileData.parents?.[0];
+      if (resolvedParentId) {
+        const parentRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${resolvedParentId}?fields=id,name`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (parentRes.ok) {
+          const parentData = await parentRes.json();
+          return { id: parentData.id, name: parentData.name };
+        }
+        return { id: resolvedParentId, name: 'Music Folder' };
+      }
+    }
+  } catch (e) {
+    console.warn('Error resolving parent folder from Drive API:', e);
+  }
+
+  return { id: doc.id, name: doc.name };
 }
 

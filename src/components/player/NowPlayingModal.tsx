@@ -16,6 +16,7 @@ import {
   Disc3,
   X,
   ListPlus,
+  Loader2,
 } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { formatDuration } from '../../utils/format';
@@ -29,6 +30,8 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ onAddToPlaylis
   const {
     currentTrack,
     isPlaying,
+    isBuffering,
+    bufferProgress,
     currentTime,
     duration,
     volume,
@@ -188,7 +191,15 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ onAddToPlaylis
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1 mr-3">
             <h2 className="text-xl font-bold text-white truncate">{currentTrack.title}</h2>
-            <p className="text-sm text-neutral-400 truncate">{currentTrack.artist}</p>
+            <p className="text-sm text-neutral-400 truncate">
+              {isBuffering ? (
+                <span className="text-emerald-400 font-medium">
+                  Streaming audio {bufferProgress > 0 ? `(${bufferProgress}%)` : '...'}
+                </span>
+              ) : (
+                currentTrack.artist
+              )}
+            </p>
           </div>
           <div className="flex items-center space-x-1">
             {onAddToPlaylist && (
@@ -260,14 +271,17 @@ export const NowPlayingModal: React.FC<NowPlayingModalProps> = ({ onAddToPlaylis
             <SkipBack className="w-7 h-7" />
           </button>
 
-          {/* Play / Pause */}
+          {/* Play / Pause / Buffering */}
           <button
             onClick={togglePlay}
-            className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 flex items-center justify-center transition shadow-xl shadow-emerald-500/25 active:scale-90"
-            title={isPlaying ? 'Pause' : 'Play'}
-            aria-label={isPlaying ? 'Pause' : 'Play'}
+            disabled={isBuffering}
+            className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 text-neutral-950 flex items-center justify-center transition shadow-xl shadow-emerald-500/25 active:scale-90 disabled:opacity-90"
+            title={isBuffering ? `Buffering ${bufferProgress}%` : isPlaying ? 'Pause' : 'Play'}
+            aria-label={isBuffering ? `Buffering ${bufferProgress}%` : isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? (
+            {isBuffering ? (
+              <Loader2 className="w-8 h-8 animate-spin" />
+            ) : isPlaying ? (
               <Pause className="w-8 h-8 fill-current" />
             ) : (
               <Play className="w-8 h-8 fill-current ml-1" />

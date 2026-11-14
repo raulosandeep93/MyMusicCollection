@@ -42,6 +42,7 @@ declare namespace google.picker {
     addView(view: any): PickerBuilder;
     setOAuthToken(token: string): PickerBuilder;
     setDeveloperKey(key: string): PickerBuilder;
+    setOrigin(origin: string): PickerBuilder;
     setCallback(callback: (data: any) => void): PickerBuilder;
     setTitle(title: string): PickerBuilder;
     build(): Picker;
